@@ -82,6 +82,7 @@ class internal::kinematics::InverseKinematicsNLP : public Ipopt::TNLP {
     //Buffers and variables used in the optimization
     iDynTree::MatrixFixSize<3, 4> quaternionDerivativeInverseMapBuffer; /*!< this is used to contain the quaternionDerivativeInverseMap, computed once for each optimization step */
     iDynTree::MatrixDynSize finalJacobianBuffer; /*!< Buffer to contain the Jacobian as modified to handle quaternions */
+    iDynTree::MatrixDynSize modelSizeJacobianBuffer; /*!< Buffer to contain the Jacobian with all the DoFs of the model */
 
     FrameInfoMap constraintsInfo; /*!< FrameInfo map for the constraints */
     FrameInfoMap targetsInfo; /*!< FrameInfo map for the targets */
@@ -95,11 +96,12 @@ class internal::kinematics::InverseKinematicsNLP : public Ipopt::TNLP {
     };
 
     COMInfo comInfo;
+    iDynTree::MatrixDynSize modelSizeCoMJacobianBuffer; /*!< Buffer to contain the CoM Jacobian with all the DoFs of the model */
 
     //Temporary optimized variables
     iDynTree::Position optimizedBasePosition; /*!< Hold the base frame origin at an optimization step */
     iDynTree::Vector4 optimizedBaseOrientation; /*!< Hold the base frame orientation at an optimization step. Note that if orientation is RPY, the last component should not be accessed */
-    iDynTree::VectorDynSize optimizedJoints; /*!< Hold the joints configuration at an optimization step */
+    iDynTree::VectorDynSize jointsAtOptimisationStep; /*!< Hold the joints configuration at an optimization step */
 
     /*!
      * @brief update all the configuration dependent variables

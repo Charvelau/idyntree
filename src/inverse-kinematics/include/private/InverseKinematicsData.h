@@ -15,8 +15,10 @@
 #include <iDynTree/Core/MatrixDynSize.h>
 #include <iDynTree/Core/Transform.h>
 #include <iDynTree/Core/Twist.h>
+#include <iDynTree/Model/Model.h>
 #include <vector>
 #include <map>
+#include <unordered_map>
 #include <IpIpoptApplication.hpp>
 
 #include <iDynTree/ConvexHullHelpers.h>
@@ -38,10 +40,20 @@ namespace kinematics{
 }
 
 class internal::kinematics::InverseKinematicsData {
+    //Declare as friend the IKNLP class so as it can access the private data
+    friend class InverseKinematicsNLP;
+    // and also inverseKineamtics
+    friend class iDynTree::InverseKinematics;
 
     //forbid copy
     InverseKinematicsData(const InverseKinematicsData&);
     InverseKinematicsData& operator=(const InverseKinematicsData&);
+
+    typedef std::unordered_map<int, int> IndicesMap;
+    struct {
+        IndicesMap modelJointsToOptimisedMap; // this is useful when user set joints configuration
+        IndicesMap optimisedToModelJointsMap; // this is useful when mapping to get back the full solution
+    } jointsMappingInfo;
     
     struct {
         bool isActive;
@@ -61,6 +73,8 @@ public:
     ///@{
     iDynTree::KinDynComputations m_dynamics; /*!< object for kinematics and dynamics computation */
 
+    iDynTree::Model m_originalModel;
+
     std::vector<std::pair<double, double> > m_jointLimits; /*!< Limits for joints. The pair is ordered as min and max */
 
     /*!
@@ -75,7 +89,8 @@ public:
         iDynTree::Vector3 worldGravity; /*!< gravity acceleration in inertial frame, i.e. -9.81 along z */
     } m_state;
 
-    unsigned m_dofs; /*!< internal DoFs of the model, i.e. size of joint vectors */
+    size_t m_dofs; /*!< internal DoFs of the model, i.e. size of joint vectors */
+    size_t m_optimisedDofs; /*!< optimised DoFs: <= Dofs of the model */
 
     ///@}
 
@@ -143,7 +158,7 @@ public:
      * @param model the model to be used
      * @return true if successfull, false otherwise
      */
-    bool setModel(const iDynTree::Model& model);
+    bool setModel(const iDynTree::Model& model, const std::vector<std::string> &consideredJoints = std::vector<std::string>());
 
     /*!
      * Reset variables to defaults
@@ -280,6 +295,7 @@ public:
     void getSolution(iDynTree::Transform & baseTransformSolution,
                      iDynTree::VectorDynSize & shapeSolution);
 
+
     /*!
      * Access the Kinematics and Dynamics object used by the solver
      *
@@ -298,8 +314,6 @@ public:
     bool isCoMTargetActive();
 
     void setCoMTargetInactive();
-    //Declare as friend the IKNLP class so as it can access the private data
-    friend class InverseKinematicsNLP;
 
 };
 

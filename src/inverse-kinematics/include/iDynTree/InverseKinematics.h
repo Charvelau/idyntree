@@ -124,15 +124,18 @@ public:
     /*!
      * @brief set the kinematic model to be used in the optimization
      *
-     * All the degrees of freedom of the model will be used as
-     * optimization variables. If you want to perform the inverse kinematics
-	 * just on a subset of the internal joints of the robot, please use the
+     * All the degrees of freedom listed in the second parameters will be used as
+     * optimization variables. 
+     * If the vector is empty, all the joints will be used.
+     *
+     * @note you may want to simplify the model by calling
 	 * loadReducedModelFromFullModel method contained in the ModelLoader class.
      *
      * @param model the kinematic model to be used in the optimization
      * @return true if successful. False otherwise
      */
-    bool setModel(const iDynTree::Model &model);
+    bool setModel(const iDynTree::Model &model,
+                  const std::vector<std::string> &consideredJoints = std::vector<std::string>());
 
     /*!
      * Reset the variables.
@@ -144,11 +147,14 @@ public:
     bool setFloatingBaseOnFrameNamed(const std::string &floatingBaseFrameName);
 
     /*!
-     * Sets the robot configuration
+     * Sets the robot current configuration
      *
      *
      * @param baseConfiguration  transformation identifying the base pose with respect to the world frame
      * @param robotConfiguration the robot configuration
+     *
+     * @note the size (and order) of jointConfiguration must match the joints in the model, not
+     * in the consideredJoints variable
      *
      * @return true if successful, false otherwise.
      */
@@ -581,6 +587,9 @@ public:
      *
      * The solver will try to obtain solutions as similar to the specified configuration as possible
      *
+     * @note the desiredJointConfiguration variable should contain the same joints as the consideredJoints variable
+     * used in the initialisation
+     *
      * @param[in] desiredJointConfiguration configuration for the joints
      * @param[in] weight weight for the joint configuration cost.
      *                   If it is not passed, the previous passed value will be mantained.
@@ -590,8 +599,15 @@ public:
      */
     bool setDesiredJointConfiguration(const iDynTree::VectorDynSize& desiredJointConfiguration, double weight=-1.0);
 
+    //desiredJointConfiguration to match model joints.
+    // not optimised joints are ignored
+    bool setDesiredModelJointConfiguration(const iDynTree::VectorDynSize& desiredJointConfiguration, double weight=-1.0);
+
     /*!
      * Initial guess for the solution
+     *
+     * @note the initialCondition variable should contain the same joints as the consideredJoints variable
+     * used in the initialisation
      *
      * @param baseTransform     initial base pose
      * @param initialCondition  initial joints configuration
@@ -600,6 +616,9 @@ public:
     bool setInitialCondition(const iDynTree::Transform* baseTransform,
                              const iDynTree::VectorDynSize* initialCondition);
 
+
+    bool setInitialConditionWithModelJoints(const iDynTree::Transform* baseTransform,
+                                            const iDynTree::VectorDynSize* initialCondition);
 
 
     // This is one part should be checked so as to properly enable warm start
@@ -610,13 +629,17 @@ public:
     ///@{
 
     /*!
-     * Initial guess for the solution
+     * Return the last solution of the inverse kinematics problem
+     * @note the shapeSolution corresponds to the joints consideredJoints used in the initialisation
      *
      * @param[out] baseTransformSolution  solution for the base position
      * @param[out] shapeSolution       solution for the shape (the internal configurations)
      */
     void getSolution(iDynTree::Transform & baseTransformSolution,
                      iDynTree::VectorDynSize & shapeSolution);
+
+    void getFullJointsSolution(iDynTree::Transform & baseTransformSolution,
+                               iDynTree::VectorDynSize & shapeSolution);
 
     ///@}
 
@@ -626,7 +649,6 @@ public:
     /*
      Other iKin features:
      - set joint limits for each joint (different from the one loaded)
-     - block joint
      - Select different solutions for the target
      */
 
