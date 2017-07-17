@@ -11,6 +11,7 @@
 #include <iDynTree/Core/TestUtils.h>
 #include <iDynTree/Model/JointState.h>
 #include <iDynTree/Model/ModelTestUtils.h>
+#include <iDynTree/ModelIO/ModelLoader.h>
 
 #include "testModels.h"
 
@@ -257,13 +258,42 @@ void simpleHumanoidWholeBodyIKConsistency(const iDynTree::InverseKinematicsRotat
 
 // Check the consistency of a simple humanoid wholebody IK test case, setting a CoM target.
 void simpleHumanoidWholeBodyIKCoMConsistency(const iDynTree::InverseKinematicsRotationParametrization rotationParametrization,
-                                             const iDynTree::InverseKinematicsTreatTargetAsConstraint targetResolutionMode)
+                                             const iDynTree::InverseKinematicsTreatTargetAsConstraint targetResolutionMode,
+                                             size_t dofsToBeRemoved = 0)
 {
     iDynTree::InverseKinematics ik;
 
     ik.setVerbosity(3);
-    
-    bool ok = ik.loadModelFromFile(getAbsModelPath("iCubGenova02.urdf"));
+
+    std::vector<std::string> consideredJoints;
+    iDynTree::ModelLoader loader;
+    loader.loadModelFromFile(getAbsModelPath("iCubGenova02.urdf"));
+    if (dofsToBeRemoved > 0) {
+        consideredJoints.reserve(loader.model().getNrOfDOFs());
+        // TODO: 1 to 1 joints to dofs
+        // Also.. I assume 0 dofs joints are at the end.
+        //fill all the joints
+        for (int index = 0; index < loader.model().getNrOfDOFs(); ++index) {
+            consideredJoints.push_back(loader.model().getJointName(index));
+        }
+    }
+    std::vector<int> toBeRemoved;
+    toBeRemoved.reserve(dofsToBeRemoved);
+    for (size_t index = 0; index < dofsToBeRemoved; ++index) {
+        int indexToBeRemoved = -1;
+        do {
+            indexToBeRemoved = rand() % loader.model().getNrOfDOFs();
+        } while (std::find(toBeRemoved.begin(), toBeRemoved.end(), indexToBeRemoved) != toBeRemoved.end());
+        toBeRemoved.push_back(indexToBeRemoved);
+    }
+    std::sort(toBeRemoved.begin(), toBeRemoved.end());
+
+    for (std::vector<int>::const_reverse_iterator rit = toBeRemoved.rbegin(); rit != toBeRemoved.rend(); ++rit) {
+        std::cerr << "Removing DOF " << *(consideredJoints.begin() + (*rit)) << "(" << *rit << ")" <<std::endl;
+        consideredJoints.erase(consideredJoints.begin() + (*rit));
+    }
+
+    bool ok = ik.setModel(loader.model(), consideredJoints);
     ASSERT_IS_TRUE(ok);
 
     //ik.setFloatingBaseOnFrameNamed("l_foot");
@@ -280,6 +310,10 @@ void simpleHumanoidWholeBodyIKCoMConsistency(const iDynTree::InverseKinematicsRo
     iDynTree::JointPosDoubleArray s = getRandomJointPositions(kinDynDes.model());
     ok = kinDynDes.setJointPos(s);
     ASSERT_IS_TRUE(ok);
+    iDynTree::Transform initialH = kinDynDes.getWorldBaseTransform();
+
+    // set robot configuration
+    ik.setRobotConfiguration(initialH, s);
 
     // Create a simple IK problem with the foot constraint
 
@@ -303,10 +337,21 @@ void simpleHumanoidWholeBodyIKCoMConsistency(const iDynTree::InverseKinematicsRo
     //ok = ik.addPositionTarget("r_elbow_1",kinDynDes.getRelativeTransform("l_sole","r_elbow_1").getPosition());
     //ASSERT_IS_TRUE(ok);
 
-    iDynTree::Transform initialH = kinDynDes.getWorldBaseTransform();
 
-    ik.setInitialCondition(&initialH, &s);
-    ik.setDesiredJointConfiguration(s, 1e-15);
+    // the desired joint configuration and initial condition is for the optimised joints
+    iDynTree::VectorDynSize sInitialOptimised(ik.model().getNrOfDOFs() - dofsToBeRemoved);
+    for (int jIndex = 0, optIndex = 0; jIndex < ik.model().getNrOfDOFs(); ++jIndex) {
+        if (std::find(toBeRemoved.begin(), toBeRemoved.end(), jIndex) != toBeRemoved.end()) {
+            // found, so do not add the joint
+            continue;
+        }
+        sInitialOptimised(optIndex++) = s(jIndex);
+    }
+
+//    ik.setInitialCondition(&initialH, &sInitialOptimised);
+    ik.setInitialConditionWithModelJoints(&initialH, &s);
+//    ik.setDesiredJointConfiguration(sInitialOptimised, 1e-15);
+    ik.setDesiredModelJointConfiguration(s, 1e-15);
 
     // Solve the optimization problem
     double tic = clockInSec();
@@ -316,10 +361,10 @@ void simpleHumanoidWholeBodyIKCoMConsistency(const iDynTree::InverseKinematicsRo
     ASSERT_IS_TRUE(ok);
 
     iDynTree::Transform basePosOptimized;
-    iDynTree::JointPosDoubleArray sOptimized(ik.model());
+    iDynTree::VectorDynSize sOptimized(ik.model().getNrOfDOFs() - dofsToBeRemoved);
     sOptimized.zero();
 
-    ik.getSolution(basePosOptimized,sOptimized);
+    ik.getSolution(basePosOptimized, sOptimized);
 
     // We create a new KinDyn object to perform forward kinematics for the optimized values
     iDynTree::KinDynComputations kinDynOpt;
@@ -330,7 +375,23 @@ void simpleHumanoidWholeBodyIKCoMConsistency(const iDynTree::InverseKinematicsRo
     dummyGrav.zero();
     iDynTree::JointDOFsDoubleArray dummyJointVel(ik.model());
     dummyJointVel.zero();
-    kinDynOpt.setRobotState(basePosOptimized, sOptimized, dummyVel, dummyJointVel, dummyGrav);
+    // remap sOptimised to full joints
+    iDynTree::JointPosDoubleArray sJointsOptimised(ik.model());
+    sJointsOptimised.zero();
+    for (int jIndex = 0, optIndex = 0; jIndex < sJointsOptimised.size(); ++jIndex) {
+        if (std::find(toBeRemoved.begin(), toBeRemoved.end(), jIndex) != toBeRemoved.end()) {
+            // found, copy the original value
+            sJointsOptimised(jIndex) = s(jIndex);
+            continue;
+        }
+        sJointsOptimised(jIndex) = sOptimized(optIndex++);
+    }
+
+    iDynTree::JointPosDoubleArray sJointsOptimised2(ik.model());
+    ik.getFullJointsSolution(basePosOptimized, sJointsOptimised2);
+    ASSERT_EQUAL_VECTOR(sJointsOptimised, sJointsOptimised2);
+
+    kinDynOpt.setRobotState(basePosOptimized, sJointsOptimised, dummyVel, dummyJointVel, dummyGrav);
 
     // Check that the contraint and the targets are respected
     double tolConstraints = 1e-7;
@@ -449,6 +510,12 @@ int main()
     simpleHumanoidWholeBodyIKCoMConsistency(iDynTree::InverseKinematicsRotationParametrizationRollPitchYaw, iDynTree::InverseKinematicsTreatTargetAsConstraintNone);
     simpleHumanoidWholeBodyIKCoMConsistency(iDynTree::InverseKinematicsRotationParametrizationRollPitchYaw, iDynTree::InverseKinematicsTreatTargetAsConstraintFull);
     simpleHumanoidWholeBodyIKCoMandChestConsistency(iDynTree::InverseKinematicsRotationParametrizationRollPitchYaw, iDynTree::InverseKinematicsTreatTargetAsConstraintFull);
+
+    for (size_t i = 1; i < 10; i++) {
+        std::cerr << "Removing " << i << " Dofs" << std::endl;
+        simpleHumanoidWholeBodyIKCoMConsistency(iDynTree::InverseKinematicsRotationParametrizationRollPitchYaw, iDynTree::InverseKinematicsTreatTargetAsConstraintFull, i);
+    }
+
 
     return EXIT_SUCCESS;
 }
