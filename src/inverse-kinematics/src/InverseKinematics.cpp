@@ -84,6 +84,13 @@ namespace iDynTree {
         return IK_PIMPL(m_pimpl)->setRobotConfiguration(baseConfiguration, jointConfiguration);
     }
 
+    bool InverseKinematics::setCurrentRobotConfiguration(const iDynTree::Transform& baseConfiguration, const iDynTree::VectorDynSize& jointConfiguration)
+    {
+        assert(m_pimpl);
+        return IK_PIMPL(m_pimpl)->setRobotConfiguration(baseConfiguration, jointConfiguration);
+    }
+
+
     bool InverseKinematics::setJointConfiguration(const std::string& jointName, const double jointConfiguration)
     {
         assert(m_pimpl);

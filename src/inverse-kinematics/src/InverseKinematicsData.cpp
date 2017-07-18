@@ -127,7 +127,7 @@ namespace kinematics {
         m_jointLimits.assign(m_optimisedDofs, std::pair<double, double>(-2e+19, 2e+19));
 
         //for each joint, ask the limits
-        //(this has sense only for optimised joints)
+        //(this makes sense only for optimised joints)
         // As the optimised joints are the first one, we can iterate on those joints
         for (iDynTree::JointIndex jointIdx = 0; jointIdx < m_optimisedDofs; ++jointIdx) {
             iDynTree::IJointConstPtr joint = orderedModel.getJoint(jointIdx);

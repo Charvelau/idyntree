@@ -600,8 +600,6 @@ namespace kinematics {
         gradient.setZero();
 
         //First part of the gradient: the part of the cost depending only on q_j
-//        Eigen::Map<Eigen::VectorXd> qj = iDynTree::toEigen(this->jointsAtOptimisationStep).head(m_data.m_optimisedDofs);
-
         Ipopt::Index baseSize = 3 + sizeOfRotationParametrization(m_data.m_rotationParametrization);
         //last n - baseSize elements are the ones corresponding to qj
         const double & jointCostWeight = m_data.m_preferredJointsWeight;

@@ -158,8 +158,24 @@ public:
      *
      * @return true if successful, false otherwise.
      */
-    bool setRobotConfiguration(const iDynTree::Transform& baseConfiguration,
-                               const iDynTree::VectorDynSize& jointConfiguration);
+    bool IDYNTREE_DEPRECATED_WITH_MSG("Use setCurrentRobotConfiguration instead")
+    setRobotConfiguration(const iDynTree::Transform& baseConfiguration,
+                          const iDynTree::VectorDynSize& jointConfiguration);
+
+    /*!
+     * Sets the robot current configuration
+     *
+     *
+     * @param baseConfiguration  transformation identifying the base pose with respect to the world frame
+     * @param robotConfiguration the robot configuration
+     *
+     * @note the size (and order) of jointConfiguration must match the joints in the model, not
+     * in the consideredJoints variable
+     *
+     * @return true if successful, false otherwise.
+     */
+    bool setCurrentRobotConfiguration(const iDynTree::Transform& baseConfiguration,
+                                      const iDynTree::VectorDynSize& jointConfiguration);
 
     /*!
      * Set configuration for the specified joint
