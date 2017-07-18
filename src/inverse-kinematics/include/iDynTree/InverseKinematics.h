@@ -678,6 +678,8 @@ public:
      * @return A constant reference to iDynTree::Model used by the inverse kinematics.
      */
     const Model & model() const;
+
+    const std::vector<std::string>& optimisedJointNames() const;
     
     void setCOMTarget(iDynTree::Position& desiredPosition, double weight = 1.0);
     

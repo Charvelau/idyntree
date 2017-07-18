@@ -91,6 +91,7 @@ public:
 
     size_t m_dofs; /*!< internal DoFs of the model, i.e. size of joint vectors */
     size_t m_optimisedDofs; /*!< optimised DoFs: <= Dofs of the model */
+    std::vector<std::string> m_optimisedJointNames;
 
     ///@}
 

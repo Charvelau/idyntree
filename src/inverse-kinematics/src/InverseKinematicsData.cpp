@@ -74,7 +74,6 @@ namespace kinematics {
         jointsMappingInfo.modelJointsToOptimisedMap.clear();
         jointsMappingInfo.optimisedToModelJointsMap.clear();
 
-
         if (!consideredJoints.empty()) {
             // Reorder the joints to have the optimised joints on top
             std::vector<std::string> orderedJoints = consideredJoints;
@@ -101,14 +100,18 @@ namespace kinematics {
             loader.loadReducedModelFromFullModel(model, orderedJoints);
             orderedModel = loader.model();
             m_optimisedDofs = consideredJoints.size();
-
+            m_optimisedJointNames = consideredJoints;
         } else {
+            m_optimisedJointNames.reserve(m_dofs);
             // Optimised and model joints match
             // fill the map with a 1to1 association
             for (iDynTree::JointIndex jointIdx = 0; jointIdx < model.getNrOfDOFs(); ++jointIdx) {
                 jointsMappingInfo.modelJointsToOptimisedMap.insert(IndicesMap::value_type(jointIdx, jointIdx));
                 jointsMappingInfo.optimisedToModelJointsMap.insert(IndicesMap::value_type(jointIdx, jointIdx));
+                m_optimisedJointNames.push_back(model.getJointName(jointIdx));
             }
+
+
         }
         assert(m_optimisedDofs <= orderedModel.getNrOfDOFs());
 

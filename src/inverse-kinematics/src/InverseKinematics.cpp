@@ -557,6 +557,11 @@ namespace iDynTree {
         return IK_PIMPL(m_pimpl)->m_originalModel;
     }
 
+    const std::vector<std::string>& InverseKinematics::optimisedJointNames() const
+    {
+        return IK_PIMPL(m_pimpl)->m_optimisedJointNames;
+    }
+
     bool InverseKinematics::isCOMTargetActive()
     {
         return IK_PIMPL(m_pimpl)->isCoMTargetActive();
