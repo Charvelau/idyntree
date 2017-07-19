@@ -313,7 +313,7 @@ void simpleHumanoidWholeBodyIKCoMConsistency(const iDynTree::InverseKinematicsRo
     iDynTree::Transform initialH = kinDynDes.getWorldBaseTransform();
 
     // set robot configuration
-    ik.setRobotConfiguration(initialH, s);
+    ik.setCurrentRobotConfiguration(initialH, s);
 
     // Create a simple IK problem with the foot constraint
 
@@ -337,21 +337,9 @@ void simpleHumanoidWholeBodyIKCoMConsistency(const iDynTree::InverseKinematicsRo
     //ok = ik.addPositionTarget("r_elbow_1",kinDynDes.getRelativeTransform("l_sole","r_elbow_1").getPosition());
     //ASSERT_IS_TRUE(ok);
 
+    ik.setInitialCondition(&initialH, &s);
+    ik.setDesiredJointConfiguration(s, 1e-15);
 
-    // the desired joint configuration and initial condition is for the optimised joints
-    iDynTree::VectorDynSize sInitialOptimised(ik.model().getNrOfDOFs() - dofsToBeRemoved);
-    for (int jIndex = 0, optIndex = 0; jIndex < ik.model().getNrOfDOFs(); ++jIndex) {
-        if (std::find(toBeRemoved.begin(), toBeRemoved.end(), jIndex) != toBeRemoved.end()) {
-            // found, so do not add the joint
-            continue;
-        }
-        sInitialOptimised(optIndex++) = s(jIndex);
-    }
-
-//    ik.setInitialCondition(&initialH, &sInitialOptimised);
-    ik.setInitialConditionWithModelJoints(&initialH, &s);
-//    ik.setDesiredJointConfiguration(sInitialOptimised, 1e-15);
-    ik.setDesiredModelJointConfiguration(s, 1e-15);
 
     // Solve the optimization problem
     double tic = clockInSec();
@@ -361,7 +349,7 @@ void simpleHumanoidWholeBodyIKCoMConsistency(const iDynTree::InverseKinematicsRo
     ASSERT_IS_TRUE(ok);
 
     iDynTree::Transform basePosOptimized;
-    iDynTree::VectorDynSize sOptimized(ik.model().getNrOfDOFs() - dofsToBeRemoved);
+    iDynTree::VectorDynSize sOptimized(ik.model().getNrOfDOFs());
     sOptimized.zero();
 
     ik.getSolution(basePosOptimized, sOptimized);
@@ -375,21 +363,9 @@ void simpleHumanoidWholeBodyIKCoMConsistency(const iDynTree::InverseKinematicsRo
     dummyGrav.zero();
     iDynTree::JointDOFsDoubleArray dummyJointVel(ik.model());
     dummyJointVel.zero();
-    // remap sOptimised to full joints
-    iDynTree::JointPosDoubleArray sJointsOptimised(ik.model());
-    sJointsOptimised.zero();
-    for (int jIndex = 0, optIndex = 0; jIndex < sJointsOptimised.size(); ++jIndex) {
-        if (std::find(toBeRemoved.begin(), toBeRemoved.end(), jIndex) != toBeRemoved.end()) {
-            // found, copy the original value
-            sJointsOptimised(jIndex) = s(jIndex);
-            continue;
-        }
-        sJointsOptimised(jIndex) = sOptimized(optIndex++);
-    }
 
-    iDynTree::JointPosDoubleArray sJointsOptimised2(ik.model());
-    ik.getFullJointsSolution(basePosOptimized, sJointsOptimised2);
-    ASSERT_EQUAL_VECTOR(sJointsOptimised, sJointsOptimised2);
+    iDynTree::JointPosDoubleArray sJointsOptimised(ik.model());
+    ik.getSolution(basePosOptimized, sJointsOptimised);
 
     kinDynOpt.setRobotState(basePosOptimized, sJointsOptimised, dummyVel, dummyJointVel, dummyGrav);
 

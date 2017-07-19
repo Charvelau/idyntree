@@ -56,67 +56,20 @@ namespace kinematics {
 
     bool InverseKinematicsData::setModel(const iDynTree::Model& model, const std::vector<std::string> &consideredJoints)
     {
-        // The inverse kinematics supports optimisation on a subset
-        // of the joints of the full model.
-        // Anyway, the joints configuration is necessary to properly update the
-        // kinematics.
-        // Because of this feature we have to separate the joints variable
-        //m_ in two subset: q_opt and q_nopt.
-        // The iDynTree KinDynComputations will be configured with all the joints
-        // while all the optimisation-related methods will consider only q_opt
-
-        // Save original model 
-        m_originalModel = model;
-
-        iDynTree::Model orderedModel(model);
-        m_optimisedDofs = model.getNrOfDOFs();
         m_dofs = model.getNrOfDOFs();
-        jointsMappingInfo.modelJointsToOptimisedMap.clear();
-        jointsMappingInfo.optimisedToModelJointsMap.clear();
+        m_fixedVariables.assign(m_dofs, false);
 
         if (!consideredJoints.empty()) {
-            // Reorder the joints to have the optimised joints on top
-            std::vector<std::string> orderedJoints = consideredJoints;
             for (iDynTree::JointIndex jointIdx = 0; jointIdx < model.getNrOfDOFs(); ++jointIdx) {
                 std::string jointName = model.getJointName(jointIdx);
-                std::vector<std::string>::const_iterator found = std::find(consideredJoints.begin(), consideredJoints.end(), jointName);
-
-                size_t optimisedIndex;
-                if (found == consideredJoints.end()) {
-                    // joint not found => it should not be optimised. Add it to the end of the container
-                    orderedJoints.push_back(jointName);
-                    optimisedIndex = orderedJoints.size() - 1;
-                } else {
-                    optimisedIndex = std::distance(consideredJoints.begin(), found);
+                if (std::find(consideredJoints.begin(), consideredJoints.end(), jointName) == consideredJoints.end()) {
+                    m_fixedVariables[jointIdx] = true;
                 }
-                // now fill the map
-                jointsMappingInfo.modelJointsToOptimisedMap.insert(IndicesMap::value_type(jointIdx, optimisedIndex));
-                jointsMappingInfo.optimisedToModelJointsMap.insert(IndicesMap::value_type(optimisedIndex, jointIdx));
+
             }
-
-            // Now we have partitioned the joints in two set: the first are the optimised joints.
-            // The second, is composed of all the other joints
-            iDynTree::ModelLoader loader;
-            loader.loadReducedModelFromFullModel(model, orderedJoints);
-            orderedModel = loader.model();
-            m_optimisedDofs = consideredJoints.size();
-            m_optimisedJointNames = consideredJoints;
-        } else {
-            m_optimisedJointNames.reserve(m_dofs);
-            // Optimised and model joints match
-            // fill the map with a 1to1 association
-            for (iDynTree::JointIndex jointIdx = 0; jointIdx < model.getNrOfDOFs(); ++jointIdx) {
-                jointsMappingInfo.modelJointsToOptimisedMap.insert(IndicesMap::value_type(jointIdx, jointIdx));
-                jointsMappingInfo.optimisedToModelJointsMap.insert(IndicesMap::value_type(jointIdx, jointIdx));
-                m_optimisedJointNames.push_back(model.getJointName(jointIdx));
-            }
-
-
         }
-        assert(m_optimisedDofs <= orderedModel.getNrOfDOFs());
 
-
-        bool result = m_dynamics.loadRobotModel(orderedModel);
+        bool result = m_dynamics.loadRobotModel(model);
         if (!result || !m_dynamics.isValid()) {
             std::cerr << "[ERROR] Error loading robot model" << std::endl;
             return false;
@@ -124,16 +77,13 @@ namespace kinematics {
 
         //prepare joint limits
         m_jointLimits.clear();
-        m_jointLimits.resize(m_optimisedDofs);
         //TODO to be changed to +_ infinity
         //default: no limits
-        m_jointLimits.assign(m_optimisedDofs, std::pair<double, double>(-2e+19, 2e+19));
+        m_jointLimits.assign(m_dofs, std::pair<double, double>(-2e+19, 2e+19));
 
         //for each joint, ask the limits
-        //(this makes sense only for optimised joints)
-        // As the optimised joints are the first one, we can iterate on those joints
-        for (iDynTree::JointIndex jointIdx = 0; jointIdx < m_optimisedDofs; ++jointIdx) {
-            iDynTree::IJointConstPtr joint = orderedModel.getJoint(jointIdx);
+        for (iDynTree::JointIndex jointIdx = 0; jointIdx < model.getNrOfJoints(); ++jointIdx) {
+            iDynTree::IJointConstPtr joint = model.getJoint(jointIdx);
             //if the joint does not have limits skip it
             if (!joint->hasPosLimits())
                 continue;
@@ -157,16 +107,14 @@ namespace kinematics {
     void InverseKinematicsData::clearProblem()
     {
         //resize vectors
-        //OptimisationDofs size
-        m_jointInitialConditions.resize(m_optimisedDofs);
+        m_jointInitialConditions.resize(m_dofs);
         m_jointInitialConditions.zero();
-        m_jointsResults.resize(m_optimisedDofs);
+        m_jointsResults.resize(m_dofs);
         m_jointsResults.zero();
-        m_preferredJointsConfiguration.resize(m_optimisedDofs);
+        m_preferredJointsConfiguration.resize(m_dofs);
         m_preferredJointsConfiguration.zero();
         m_preferredJointsWeight = 1e-6;
 
-        //Model dofs size
         m_state.jointsConfiguration.resize(m_dofs);
         m_state.jointsConfiguration.zero();
 
@@ -261,9 +209,7 @@ namespace kinematics {
                                                       const iDynTree::VectorDynSize& jointConfiguration)
     {
         assert(m_state.jointsConfiguration.size() == jointConfiguration.size());
-        for (int index = 0; index < jointConfiguration.size(); ++index) {
-            m_state.jointsConfiguration(jointsMappingInfo.modelJointsToOptimisedMap[index]) = jointConfiguration(index);
-        }
+        m_state.jointsConfiguration = jointConfiguration;
         m_state.basePose = baseConfiguration;
         updateRobotConfiguration();
         return true;
@@ -313,7 +259,7 @@ namespace kinematics {
         }
 
         if (!m_areJointsInitialConditionsSet) {
-            iDynTree::toEigen(m_jointInitialConditions) = iDynTree::toEigen(m_state.jointsConfiguration).head(m_optimisedDofs);
+            m_jointInitialConditions = m_state.jointsConfiguration;
         }
 
         //2) Check joint limits..
@@ -374,6 +320,7 @@ namespace kinematics {
             m_solver->Options()->SetNumericValue("tol", m_tol);
             m_solver->Options()->SetNumericValue("constr_viol_tol", m_constrTol);
             m_solver->Options()->SetIntegerValue("acceptable_iter", 0);
+            m_solver->Options()->SetStringValue("fixed_variable_treatment", "make_parameter"); //which btw is the default option
 #ifndef NDEBUG
             m_solver->Options()->SetStringValue("derivative_test", "first-order");
 #endif
@@ -409,7 +356,7 @@ namespace kinematics {
     void InverseKinematicsData::getSolution(iDynTree::Transform & baseTransformSolution,
                                             iDynTree::VectorDynSize & shapeSolution)
     {
-        assert(shapeSolution.size() == m_optimisedDofs);
+        assert(shapeSolution.size() == m_dofs);
         baseTransformSolution = m_baseResults;
         shapeSolution         = m_jointsResults;
     }

@@ -50,8 +50,6 @@ namespace kinematics {
 
         //resize some buffers
         finalJacobianBuffer.resize((3 + sizeOfRotationParametrization(m_data.m_rotationParametrization)), n);
-        modelSizeJacobianBuffer.resize(6, 6 + m_data.m_dofs);
-        modelSizeCoMJacobianBuffer.resize(3, 6 + m_data.m_dofs);
 
         constraintsInfo.clear();
         targetsInfo.clear();
@@ -60,7 +58,7 @@ namespace kinematics {
         for (TransformMap::const_iterator target = m_data.m_targets.begin();
              target != m_data.m_targets.end(); ++target) {
             FrameInfo info;
-            info.jacobian.resize(6, m_data.m_optimisedDofs + 6);
+            info.jacobian.resize(6, m_data.m_dofs + 6);
             info.jacobian.zero();
             targetsInfo.insert(FrameInfoMap::value_type(target->first, info));
         }
@@ -68,16 +66,16 @@ namespace kinematics {
         for (TransformMap::const_iterator constraint = m_data.m_constraints.begin();
              constraint != m_data.m_constraints.end(); ++constraint) {
             FrameInfo info;
-            info.jacobian.resize(6, m_data.m_optimisedDofs + 6);
+            info.jacobian.resize(6, m_data.m_dofs + 6);
             info.jacobian.zero();
             constraintsInfo.insert(FrameInfoMap::value_type(constraint->first, info));
         }
 
         //prepare buffer for COM constraint
         comInfo.com.zero();
-        comInfo.comJacobian.resize(3, m_data.m_optimisedDofs + 6);
-        comInfo.comJacobianAnalytical.resize(3, m_data.m_optimisedDofs + 3 + sizeOfRotationParametrization(m_data.m_rotationParametrization));
-        comInfo.projectedComJacobian.resize(m_data.m_comHullConstraint.getNrOfConstraints(), m_data.m_optimisedDofs + 3 + sizeOfRotationParametrization(m_data.m_rotationParametrization));
+        comInfo.comJacobian.resize(3, m_data.m_dofs + 6);
+        comInfo.comJacobianAnalytical.resize(3, m_data.m_dofs + 3 + sizeOfRotationParametrization(m_data.m_rotationParametrization));
+        comInfo.projectedComJacobian.resize(m_data.m_comHullConstraint.getNrOfConstraints(), m_data.m_dofs + 3 + sizeOfRotationParametrization(m_data.m_rotationParametrization));
     }
 
     bool InverseKinematicsNLP::updateState(const Ipopt::Number * x)
@@ -96,8 +94,8 @@ namespace kinematics {
         }
 
         //joints
-        Eigen::Map<const Eigen::VectorXd> optimisedJoints(&x[3 + sizeOfRotationParametrization(m_data.m_rotationParametrization)], m_data.m_optimisedDofs);
-        iDynTree::toEigen(jointsAtOptimisationStep).head(m_data.m_optimisedDofs) = optimisedJoints;
+        Eigen::Map<const Eigen::VectorXd> optimisedJoints(&x[3 + sizeOfRotationParametrization(m_data.m_rotationParametrization)], m_data.m_dofs);
+        iDynTree::toEigen(jointsAtOptimisationStep) = optimisedJoints;
 
         //Update robot state and state-dependent variables
         iDynTree::Rotation baseOrientationRotation;
@@ -187,8 +185,7 @@ namespace kinematics {
 
             FrameInfo &frameInfo = targetsInfo[target->first];
             frameInfo.transform = m_data.m_dynamics.getWorldTransform(target->first);
-            m_data.m_dynamics.getFrameFreeFloatingJacobian(target->first, modelSizeJacobianBuffer);
-            iDynTree::toEigen(frameInfo.jacobian) = iDynTree::toEigen(modelSizeJacobianBuffer).leftCols(6 + m_data.m_optimisedDofs);
+            m_data.m_dynamics.getFrameFreeFloatingJacobian(target->first, frameInfo.jacobian);
 
             iDynTree::Vector4 transformQuat;
             frameInfo.transform.getRotation().getQuaternion(transformQuat);
@@ -219,8 +216,7 @@ namespace kinematics {
 
             FrameInfo &frameInfo = constraintsInfo[constraint->first];
             frameInfo.transform = m_data.m_dynamics.getWorldTransform(constraint->first);
-            m_data.m_dynamics.getFrameFreeFloatingJacobian(constraint->first, modelSizeJacobianBuffer);
-            iDynTree::toEigen(frameInfo.jacobian) = iDynTree::toEigen(modelSizeJacobianBuffer).leftCols(6 + m_data.m_optimisedDofs);
+            m_data.m_dynamics.getFrameFreeFloatingJacobian(constraint->first, frameInfo.jacobian);
 
             iDynTree::Vector4 transformQuat;
             frameInfo.transform.getRotation().getQuaternion(transformQuat);
@@ -238,8 +234,7 @@ namespace kinematics {
         // Update com position and jacobian
         if (m_data.m_comHullConstraint.isActive() || m_data.isCoMTargetActive()) {
             comInfo.com = m_data.m_dynamics.getCenterOfMassPosition();
-            m_data.m_dynamics.getCenterOfMassJacobian(modelSizeCoMJacobianBuffer);
-            iDynTree::toEigen(comInfo.comJacobian) = iDynTree::toEigen(modelSizeCoMJacobianBuffer).leftCols(6 + m_data.m_optimisedDofs);
+            m_data.m_dynamics.getCenterOfMassJacobian(comInfo.comJacobian);
 
             if (m_data.m_comHullConstraint.isActive()) {
                 // Project the jacobian and the com
@@ -258,7 +253,7 @@ namespace kinematics {
                                             IndexStyleEnum& index_style)
     {
         //Size of optimization variables is 3 + Orientation (base) + size of joints we optimize
-        n = 3 + sizeOfRotationParametrization(m_data.m_rotationParametrization) + m_data.m_optimisedDofs;
+        n = 3 + sizeOfRotationParametrization(m_data.m_rotationParametrization) + m_data.m_dofs;
 
         //Start adding constraints
         m = 0;
@@ -346,9 +341,13 @@ namespace kinematics {
 
         //for joints use the limits
         for (Ipopt::Index i = baseSize; i < n; ++i) {
-            const std::pair<double, double> &limits = m_data.m_jointLimits[i - baseSize];
-            x_l[i] = limits.first;
-            x_u[i] = limits.second;
+            if (m_data.m_fixedVariables[i - baseSize]) {
+                x_l[i] = x_u[i] = m_data.m_jointInitialConditions(i - baseSize);
+            } else {
+                const std::pair<double, double> &limits = m_data.m_jointLimits[i - baseSize];
+                x_l[i] = limits.first;
+                x_u[i] = limits.second;
+            }
         }
 
         //Equality constraints
@@ -520,7 +519,7 @@ namespace kinematics {
         //Cost function
         //J = Sum_i^#targets  Error on rotation   + ||q - q_des ||^2 (as regularization term)
 
-        Eigen::VectorXd jointError = iDynTree::toEigen(this->jointsAtOptimisationStep).head(m_data.m_optimisedDofs)-iDynTree::toEigen(m_data.m_preferredJointsConfiguration);
+        Eigen::VectorXd jointError = iDynTree::toEigen(jointsAtOptimisationStep)-iDynTree::toEigen(m_data.m_preferredJointsConfiguration);
         const double& jointCostWeight = m_data.m_preferredJointsWeight;
 
         obj_value = 0.5 * jointCostWeight * jointError.squaredNorm();
@@ -600,10 +599,12 @@ namespace kinematics {
         gradient.setZero();
 
         //First part of the gradient: the part of the cost depending only on q_j
+        Eigen::Map<Eigen::VectorXd> qj = iDynTree::toEigen(jointsAtOptimisationStep);
+
         Ipopt::Index baseSize = 3 + sizeOfRotationParametrization(m_data.m_rotationParametrization);
         //last n - baseSize elements are the ones corresponding to qj
         const double & jointCostWeight = m_data.m_preferredJointsWeight;
-        gradient.tail(n - baseSize) = jointCostWeight * (iDynTree::toEigen(this->jointsAtOptimisationStep).head(m_data.m_optimisedDofs) - iDynTree::toEigen(m_data.m_preferredJointsConfiguration)).transpose();
+        gradient.tail(n - baseSize) = jointCostWeight * (qj - iDynTree::toEigen(m_data.m_preferredJointsConfiguration)).transpose();
 
         //Second part of the gradient: this part depends on all q, i.e. x
         //compute errors on rotation
@@ -1077,7 +1078,7 @@ namespace kinematics {
         m_data.m_baseResults.setRotation(baseOrientation);
 
         //joints
-        Eigen::Map<const Eigen::VectorXd> optimisedJoints(&x[3 + sizeOfRotationParametrization(m_data.m_rotationParametrization)], m_data.m_optimisedDofs);
+        Eigen::Map<const Eigen::VectorXd> optimisedJoints(&x[3 + sizeOfRotationParametrization(m_data.m_rotationParametrization)], m_data.m_dofs);
         iDynTree::toEigen(m_data.m_jointsResults) = optimisedJoints;
 
     }

@@ -15,10 +15,8 @@
 #include <iDynTree/Core/MatrixDynSize.h>
 #include <iDynTree/Core/Transform.h>
 #include <iDynTree/Core/Twist.h>
-#include <iDynTree/Model/Model.h>
 #include <vector>
 #include <map>
-#include <unordered_map>
 #include <IpIpoptApplication.hpp>
 
 #include <iDynTree/ConvexHullHelpers.h>
@@ -49,12 +47,6 @@ class internal::kinematics::InverseKinematicsData {
     InverseKinematicsData(const InverseKinematicsData&);
     InverseKinematicsData& operator=(const InverseKinematicsData&);
 
-    typedef std::unordered_map<int, int> IndicesMap;
-    struct {
-        IndicesMap modelJointsToOptimisedMap; // this is useful when user set joints configuration
-        IndicesMap optimisedToModelJointsMap; // this is useful when mapping to get back the full solution
-    } jointsMappingInfo;
-    
     struct {
         bool isActive;
         iDynTree::Position desiredPosition;
@@ -73,8 +65,6 @@ public:
     ///@{
     iDynTree::KinDynComputations m_dynamics; /*!< object for kinematics and dynamics computation */
 
-    iDynTree::Model m_originalModel;
-
     std::vector<std::pair<double, double> > m_jointLimits; /*!< Limits for joints. The pair is ordered as min and max */
 
     /*!
@@ -90,8 +80,7 @@ public:
     } m_state;
 
     size_t m_dofs; /*!< internal DoFs of the model, i.e. size of joint vectors */
-    size_t m_optimisedDofs; /*!< optimised DoFs: <= Dofs of the model */
-    std::vector<std::string> m_optimisedJointNames;
+    std::vector<bool> m_fixedVariables; /* for each variable it says if it is fixed or optimisation variable */
 
     ///@}
 
@@ -295,7 +284,6 @@ public:
 
     void getSolution(iDynTree::Transform & baseTransformSolution,
                      iDynTree::VectorDynSize & shapeSolution);
-
 
     /*!
      * Access the Kinematics and Dynamics object used by the solver

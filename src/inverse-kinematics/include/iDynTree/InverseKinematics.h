@@ -603,8 +603,7 @@ public:
      *
      * The solver will try to obtain solutions as similar to the specified configuration as possible
      *
-     * @note the desiredJointConfiguration variable should contain the same joints as the consideredJoints variable
-     * used in the initialisation
+     * @note the desiredJointConfiguration have the same serialisation of the joints in the specified model
      *
      * @param[in] desiredJointConfiguration configuration for the joints
      * @param[in] weight weight for the joint configuration cost.
@@ -615,27 +614,17 @@ public:
      */
     bool setDesiredJointConfiguration(const iDynTree::VectorDynSize& desiredJointConfiguration, double weight=-1.0);
 
-    //desiredJointConfiguration to match model joints.
-    // not optimised joints are ignored
-    bool setDesiredModelJointConfiguration(const iDynTree::VectorDynSize& desiredJointConfiguration, double weight=-1.0);
 
     /*!
      * Initial guess for the solution
      *
-     * @note the initialCondition variable should contain the same joints as the consideredJoints variable
-     * used in the initialisation
-     *
+     * @note the initialCondition variable have the same serialisation of the joints in the specified model
      * @param baseTransform     initial base pose
      * @param initialCondition  initial joints configuration
      * @return
      */
     bool setInitialCondition(const iDynTree::Transform* baseTransform,
                              const iDynTree::VectorDynSize* initialCondition);
-
-
-    bool setInitialConditionWithModelJoints(const iDynTree::Transform* baseTransform,
-                                            const iDynTree::VectorDynSize* initialCondition);
-
 
     // This is one part should be checked so as to properly enable warm start
     bool solve();
@@ -646,16 +635,12 @@ public:
 
     /*!
      * Return the last solution of the inverse kinematics problem
-     * @note the shapeSolution corresponds to the joints consideredJoints used in the initialisation
      *
      * @param[out] baseTransformSolution  solution for the base position
      * @param[out] shapeSolution       solution for the shape (the internal configurations)
      */
     void getSolution(iDynTree::Transform & baseTransformSolution,
                      iDynTree::VectorDynSize & shapeSolution);
-
-    void getFullJointsSolution(iDynTree::Transform & baseTransformSolution,
-                               iDynTree::VectorDynSize & shapeSolution);
 
     ///@}
 
@@ -679,8 +664,6 @@ public:
      */
     const Model & model() const;
 
-    const std::vector<std::string>& optimisedJointNames() const;
-    
     void setCOMTarget(iDynTree::Position& desiredPosition, double weight = 1.0);
     
     void setCOMAsConstraint(bool asConstraint = true);

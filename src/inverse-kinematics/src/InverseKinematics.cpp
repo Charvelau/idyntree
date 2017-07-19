@@ -10,7 +10,6 @@
 #include "InverseKinematicsData.h"
 #include "TransformConstraint.h"
 
-#include <iDynTree/Core/EigenHelpers.h>
 #include <iDynTree/Core/Axis.h>
 #include <iDynTree/Core/Direction.h>
 #include <iDynTree/Core/Transform.h>
@@ -422,45 +421,10 @@ namespace iDynTree {
         return IK_PIMPL(m_pimpl)->setDesiredJointConfiguration(desiredJointConfiguration, weight);
     }
 
-    bool InverseKinematics::setDesiredModelJointConfiguration(const iDynTree::VectorDynSize& desiredJointConfiguration,
-                                                              double weight)
-    {
-        assert(m_pimpl);
-
-        assert(desiredJointConfiguration.size() == IK_PIMPL(m_pimpl)->m_dofs);
-        for (int index = 0; index < IK_PIMPL(m_pimpl)->m_optimisedDofs; ++index) {
-            IK_PIMPL(m_pimpl)->m_preferredJointsConfiguration(index) = desiredJointConfiguration(IK_PIMPL(m_pimpl)->jointsMappingInfo.optimisedToModelJointsMap[index]);
-        }
-
-        if (weight >= 0.0) {
-            IK_PIMPL(m_pimpl)->m_preferredJointsWeight = weight;
-        }
-        return true;
-    }
-
     bool InverseKinematics::setInitialCondition(const iDynTree::Transform* baseTransform, const iDynTree::VectorDynSize* initialCondition)
     {
         assert(m_pimpl);
         return IK_PIMPL(m_pimpl)->setInitialCondition(baseTransform, initialCondition);
-    }
-
-    bool InverseKinematics::setInitialConditionWithModelJoints(const iDynTree::Transform* baseTransform,
-                                                               const iDynTree::VectorDynSize* initialJointCondition)
-    {
-        assert(m_pimpl);
-        if (baseTransform) {
-            IK_PIMPL(m_pimpl)->m_baseInitialCondition = *baseTransform;
-            IK_PIMPL(m_pimpl)->m_areBaseInitialConditionsSet = true;
-        }
-
-        if (initialJointCondition) {
-            assert(initialJointCondition->size() == IK_PIMPL(m_pimpl)->m_dofs);
-            for (int index = 0; index < IK_PIMPL(m_pimpl)->m_optimisedDofs; ++index) {
-                IK_PIMPL(m_pimpl)->m_jointInitialConditions(index) = (*initialJointCondition)(IK_PIMPL(m_pimpl)->jointsMappingInfo.optimisedToModelJointsMap[index]);
-            }
-            IK_PIMPL(m_pimpl)->m_areJointsInitialConditionsSet = true;
-        }
-        return true;
     }
 
     void InverseKinematics::setDefaultTargetResolutionMode(iDynTree::InverseKinematicsTreatTargetAsConstraint mode)
@@ -523,26 +487,6 @@ namespace iDynTree {
         return;
     }
 
-
-    void InverseKinematics::getFullJointsSolution(iDynTree::Transform & baseTransformSolution,
-                               iDynTree::VectorDynSize & shapeSolution)
-    {
-        assert(m_pimpl);
-        assert(shapeSolution.size() == IK_PIMPL(m_pimpl)->m_dofs);
-        baseTransformSolution = IK_PIMPL(m_pimpl)->m_baseResults;
-
-        // split in two the shapeSolution
-        for (int i = 0; i < IK_PIMPL(m_pimpl)->m_optimisedDofs; ++i) {
-            shapeSolution(IK_PIMPL(m_pimpl)->jointsMappingInfo.optimisedToModelJointsMap[i]) = IK_PIMPL(m_pimpl)->m_jointsResults(i);
-        }
-
-        for (int i = IK_PIMPL(m_pimpl)->m_optimisedDofs; i < IK_PIMPL(m_pimpl)->m_dofs; ++i) {
-            shapeSolution(IK_PIMPL(m_pimpl)->jointsMappingInfo.optimisedToModelJointsMap[i]) = IK_PIMPL(m_pimpl)->m_state.jointsConfiguration(i);
-        }
-
-        return;
-    }
-
     bool InverseKinematics::getPoseForFrame(const std::string& frameName,
                                             iDynTree::Transform& transform)
     {
@@ -554,12 +498,7 @@ namespace iDynTree {
 
     const Model & InverseKinematics::model() const
     {
-        return IK_PIMPL(m_pimpl)->m_originalModel;
-    }
-
-    const std::vector<std::string>& InverseKinematics::optimisedJointNames() const
-    {
-        return IK_PIMPL(m_pimpl)->m_optimisedJointNames;
+        return IK_PIMPL(m_pimpl)->m_dynamics.model();
     }
 
     bool InverseKinematics::isCOMTargetActive()
