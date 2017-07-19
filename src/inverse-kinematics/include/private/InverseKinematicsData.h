@@ -15,12 +15,16 @@
 #include <iDynTree/Core/MatrixDynSize.h>
 #include <iDynTree/Core/Transform.h>
 #include <iDynTree/Core/Twist.h>
-#include <vector>
-#include <map>
-#include <IpIpoptApplication.hpp>
 
 #include <iDynTree/ConvexHullHelpers.h>
 #include <iDynTree/InverseKinematics.h>
+
+#include <IpIpoptApplication.hpp>
+
+
+#include <vector>
+#include <map>
+#include <unordered_map>
 
 namespace iDynTree {
     class Model;
@@ -59,6 +63,13 @@ class internal::kinematics::InverseKinematicsData {
     // the "model" variables and the parameters of the optimization.
 
     iDynTree::InverseKinematicsTreatTargetAsConstraint m_defaultTargetResolutionMode;
+
+    enum InverseKinematicsInitialConditionType {
+        InverseKinematicsInitialConditionNotSet,
+        InverseKinematicsInitialConditionPartial,
+        InverseKinematicsInitialConditionFull
+    };
+    
 public:
     /*! @name Model-related variables
      */
@@ -80,7 +91,10 @@ public:
     } m_state;
 
     size_t m_dofs; /*!< internal DoFs of the model, i.e. size of joint vectors */
-    std::vector<bool> m_fixedVariables; /* for each variable it says if it is fixed or optimisation variable */
+    struct {
+        std::vector<bool> fixedVariables; /* for each variable it says if it is fixed or optimisation variable */
+        std::unordered_map<int, int> modelJointsToOptimisedJoints; // that is key = index in the reduced set of variables, value = index in the full model
+    } m_reducedVariablesInfo;
 
     ///@}
 
@@ -100,7 +114,8 @@ public:
     double m_preferredJointsWeight;
 
     bool m_areBaseInitialConditionsSet; /*!< True if initial condition for the base pose are provided by the user */
-    bool m_areJointsInitialConditionsSet; /*!< True if initial condition for the joints are provided by the user */
+    
+    InverseKinematicsInitialConditionType m_areJointsInitialConditionsSet; /*!< specify if the initial condition for the joints are provided by the user */
 
     //These variables containts the initial condition
     iDynTree::Transform m_baseInitialCondition;

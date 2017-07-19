@@ -612,7 +612,10 @@ public:
      *
      * @return true if successful, false otherwise.
      */
-    bool setDesiredJointConfiguration(const iDynTree::VectorDynSize& desiredJointConfiguration, double weight=-1.0);
+    bool IDYNTREE_DEPRECATED_WITH_MSG("Use the explicit setDesiredFullJointsConfiguration or setDesiredReducedJointConfiguration instead")
+    setDesiredJointConfiguration(const iDynTree::VectorDynSize& desiredJointConfiguration, double weight=-1.0);
+    bool setDesiredFullJointsConfiguration(const iDynTree::VectorDynSize& desiredJointConfiguration, double weight=-1.0);
+    bool setDesiredReducedJointConfiguration(const iDynTree::VectorDynSize& desiredJointConfiguration, double weight=-1.0);
 
 
     /*!
@@ -623,8 +626,14 @@ public:
      * @param initialCondition  initial joints configuration
      * @return
      */
-    bool setInitialCondition(const iDynTree::Transform* baseTransform,
-                             const iDynTree::VectorDynSize* initialCondition);
+    bool IDYNTREE_DEPRECATED_WITH_MSG("Use the explicit setFullJointsInitialCondition or setReducedInitialCondition instead")
+    setInitialCondition(const iDynTree::Transform* baseTransform,
+                        const iDynTree::VectorDynSize* initialCondition);
+
+    bool setFullJointsInitialCondition(const iDynTree::Transform* baseTransform,
+                                       const iDynTree::VectorDynSize* initialCondition);
+    bool setReducedInitialCondition(const iDynTree::Transform* baseTransform,
+                                    const iDynTree::VectorDynSize* initialCondition);
 
     // This is one part should be checked so as to properly enable warm start
     bool solve();
@@ -639,8 +648,23 @@ public:
      * @param[out] baseTransformSolution  solution for the base position
      * @param[out] shapeSolution       solution for the shape (the internal configurations)
      */
-    void getSolution(iDynTree::Transform & baseTransformSolution,
-                     iDynTree::VectorDynSize & shapeSolution);
+    void IDYNTREE_DEPRECATED_WITH_MSG("Use the explicit getFullJointsSolution or getReducedSolution instead")
+    getSolution(iDynTree::Transform& baseTransformSolution,
+                iDynTree::VectorDynSize& shapeSolution);
+
+    void getFullJointsSolution(iDynTree::Transform& baseTransformSolution,
+                               iDynTree::VectorDynSize& shapeSolution);
+
+    /*!
+     * Return the last solution of the inverse kinematics problem
+     *
+     * This method returns in the shapeSolution variable only the joints that have been optimised
+     * viz. only the joints specified in the consideredJoints variable in the initialization 
+     * @param[out] baseTransformSolution  solution for the base position
+     * @param[out] shapeSolution       solution for the shape (the internal configurations)
+     */
+    void getReducedSolution(iDynTree::Transform& baseTransformSolution,
+                            iDynTree::VectorDynSize& shapeSolution);
 
     ///@}
 
@@ -663,6 +687,8 @@ public:
      * @return A constant reference to iDynTree::Model used by the inverse kinematics.
      */
     const Model & model() const;
+
+    size_t numberOfOptimisationVariables();
 
     void setCOMTarget(iDynTree::Position& desiredPosition, double weight = 1.0);
     

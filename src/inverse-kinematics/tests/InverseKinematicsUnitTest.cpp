@@ -337,9 +337,8 @@ void simpleHumanoidWholeBodyIKCoMConsistency(const iDynTree::InverseKinematicsRo
     //ok = ik.addPositionTarget("r_elbow_1",kinDynDes.getRelativeTransform("l_sole","r_elbow_1").getPosition());
     //ASSERT_IS_TRUE(ok);
 
-    ik.setInitialCondition(&initialH, &s);
-    ik.setDesiredJointConfiguration(s, 1e-15);
-
+    ik.setFullJointsInitialCondition(&initialH, &s);
+    ik.setDesiredFullJointsConfiguration(s, 1e-15);
 
     // Solve the optimization problem
     double tic = clockInSec();
@@ -352,7 +351,7 @@ void simpleHumanoidWholeBodyIKCoMConsistency(const iDynTree::InverseKinematicsRo
     iDynTree::VectorDynSize sOptimized(ik.model().getNrOfDOFs());
     sOptimized.zero();
 
-    ik.getSolution(basePosOptimized, sOptimized);
+    ik.getFullJointsSolution(basePosOptimized, sOptimized);
 
     // We create a new KinDyn object to perform forward kinematics for the optimized values
     iDynTree::KinDynComputations kinDynOpt;
@@ -364,10 +363,7 @@ void simpleHumanoidWholeBodyIKCoMConsistency(const iDynTree::InverseKinematicsRo
     iDynTree::JointDOFsDoubleArray dummyJointVel(ik.model());
     dummyJointVel.zero();
 
-    iDynTree::JointPosDoubleArray sJointsOptimised(ik.model());
-    ik.getSolution(basePosOptimized, sJointsOptimised);
-
-    kinDynOpt.setRobotState(basePosOptimized, sJointsOptimised, dummyVel, dummyJointVel, dummyGrav);
+    kinDynOpt.setRobotState(basePosOptimized, sOptimized, dummyVel, dummyJointVel, dummyGrav);
 
     // Check that the contraint and the targets are respected
     double tolConstraints = 1e-7;

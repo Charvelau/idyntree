@@ -341,7 +341,7 @@ namespace kinematics {
 
         //for joints use the limits
         for (Ipopt::Index i = baseSize; i < n; ++i) {
-            if (m_data.m_fixedVariables[i - baseSize]) {
+            if (m_data.m_reducedVariablesInfo.fixedVariables[i - baseSize]) {
                 x_l[i] = x_u[i] = m_data.m_jointInitialConditions(i - baseSize);
             } else {
                 const std::pair<double, double> &limits = m_data.m_jointLimits[i - baseSize];

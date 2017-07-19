@@ -31,7 +31,7 @@ namespace kinematics {
     , m_dofs(0)
     , m_rotationParametrization(iDynTree::InverseKinematicsRotationParametrizationQuaternion)
     , m_areBaseInitialConditionsSet(false)
-    , m_areJointsInitialConditionsSet(false)
+    , m_areJointsInitialConditionsSet(InverseKinematicsInitialConditionNotSet)
     , m_solver(NULL)
     // The default values for the ipopt related parameters are exactly the one of IPOPT,
     // see https://www.coin-or.org/Ipopt/documentation/node41.html
@@ -57,15 +57,24 @@ namespace kinematics {
     bool InverseKinematicsData::setModel(const iDynTree::Model& model, const std::vector<std::string> &consideredJoints)
     {
         m_dofs = model.getNrOfDOFs();
-        m_fixedVariables.assign(m_dofs, false);
+        m_reducedVariablesInfo.fixedVariables.assign(m_dofs, false);
+        m_reducedVariablesInfo.modelJointsToOptimisedJoints.clear();
 
         if (!consideredJoints.empty()) {
             for (iDynTree::JointIndex jointIdx = 0; jointIdx < model.getNrOfDOFs(); ++jointIdx) {
                 std::string jointName = model.getJointName(jointIdx);
-                if (std::find(consideredJoints.begin(), consideredJoints.end(), jointName) == consideredJoints.end()) {
-                    m_fixedVariables[jointIdx] = true;
+                std::vector<std::string>::const_iterator found = std::find(consideredJoints.begin(), consideredJoints.end(), jointName);
+                if (found == consideredJoints.end()) {
+                    m_reducedVariablesInfo.fixedVariables[jointIdx] = true;
+                    continue;
                 }
-
+                // found => get the index in the optimised joints vector
+                size_t optimisedIndex = std::distance(consideredJoints.begin(), found);
+                m_reducedVariablesInfo.modelJointsToOptimisedJoints.insert(std::unordered_map<int, int>::value_type(optimisedIndex, jointIdx));
+            }
+        } else {
+            for (iDynTree::JointIndex jointIdx = 0; jointIdx < model.getNrOfDOFs(); ++jointIdx) {
+                m_reducedVariablesInfo.modelJointsToOptimisedJoints.insert(std::unordered_map<int, int>::value_type(jointIdx, jointIdx));
             }
         }
 
@@ -129,7 +138,7 @@ namespace kinematics {
         m_comHullConstraint.setActive(false);
 
         m_areBaseInitialConditionsSet = false;
-        m_areJointsInitialConditionsSet = false;
+        m_areJointsInitialConditionsSet = internal::kinematics::InverseKinematicsData::InverseKinematicsInitialConditionNotSet;
         
         m_comTarget.isActive = false;
         m_comTarget.weight = 0;
@@ -199,7 +208,7 @@ namespace kinematics {
         if (initialJointCondition) {
             assert(initialJointCondition->size() == m_jointInitialConditions.size());
             m_jointInitialConditions = *initialJointCondition;
-            m_areJointsInitialConditionsSet = true;
+            m_areJointsInitialConditionsSet = internal::kinematics::InverseKinematicsData::InverseKinematicsInitialConditionFull;
         }
 
         return true;
@@ -258,8 +267,22 @@ namespace kinematics {
             m_baseInitialCondition = m_state.basePose;
         }
 
-        if (!m_areJointsInitialConditionsSet) {
-            m_jointInitialConditions = m_state.jointsConfiguration;
+        switch (m_areJointsInitialConditionsSet) {
+            case InverseKinematicsInitialConditionNotSet:
+                m_jointInitialConditions = m_state.jointsConfiguration;
+                break;
+            case InverseKinematicsInitialConditionPartial:
+                // in this case we have to set in m_jointInitialConditions
+                // the joints in m_state.jointsConfiguration which are not considered
+                // in the reduced variables
+                for (size_t i = 0; i < m_reducedVariablesInfo.fixedVariables.size(); ++i) {
+                    if (!m_reducedVariablesInfo.fixedVariables[i]) continue;
+                    // joint is fixed => set the initial condition
+                    m_jointInitialConditions(i) = m_state.jointsConfiguration(i);
+                }
+                break;
+            default:
+                break;
         }
 
         //2) Check joint limits..
