@@ -688,7 +688,7 @@ public:
      */
     const Model & model() const;
 
-    size_t numberOfOptimisationVariables();
+    size_t numberOfOptimisationVariables() const;
 
     void setCOMTarget(iDynTree::Position& desiredPosition, double weight = 1.0);
     

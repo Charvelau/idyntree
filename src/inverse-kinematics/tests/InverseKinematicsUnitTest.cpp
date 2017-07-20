@@ -348,10 +348,16 @@ void simpleHumanoidWholeBodyIKCoMConsistency(const iDynTree::InverseKinematicsRo
     ASSERT_IS_TRUE(ok);
 
     iDynTree::Transform basePosOptimized;
-    iDynTree::VectorDynSize sOptimized(ik.model().getNrOfDOFs());
+    iDynTree::VectorDynSize sOptimized(ik.model().getNrOfDOFs()), sOptimizedFromReduced(ik.model().getNrOfDOFs());
     sOptimized.zero();
+    sOptimizedFromReduced.zero();
+    iDynTree::VectorDynSize sReducedOptimized(ik.numberOfOptimisationVariables());
+    sReducedOptimized.zero();
 
     ik.getFullJointsSolution(basePosOptimized, sOptimized);
+    ik.getReducedSolution(basePosOptimized, sReducedOptimized);
+    // now map sReduced to sOptimizedFromReduced
+    
 
     // We create a new KinDyn object to perform forward kinematics for the optimized values
     iDynTree::KinDynComputations kinDynOpt;

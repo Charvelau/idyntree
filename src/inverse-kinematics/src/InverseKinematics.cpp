@@ -579,9 +579,14 @@ namespace iDynTree {
 
     }
 
-    const Model & InverseKinematics::model() const
+    const Model& InverseKinematics::model() const
     {
         return IK_PIMPL(m_pimpl)->m_dynamics.model();
+    }
+
+    size_t InverseKinematics::numberOfOptimisationVariables() const
+    {
+        return IK_PIMPL(m_pimpl)->m_reducedVariablesInfo.modelJointsToOptimisedJoints.size();
     }
 
     bool InverseKinematics::isCOMTargetActive()
